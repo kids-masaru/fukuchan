@@ -1,0 +1,12 @@
+Sheets: ['フェイスシート', 'アセスメント']
+
+--- Scanning Sheet: フェイスシート ---
+Found '移動' in cell AA28: 移動支援
+Found '就業' in cell A32: 就業
+Found '就業' in cell E32: 就業経験
+Found 'イラスト' in cell E35: イラスト
+
+--- Scanning Sheet: アセスメント ---
+Found 'インスリン' in cell B4: 糖尿病（インスリン注射）　・　腎不全（透析）　・　アレルギー　・アルコール依存
+Found '服薬' in cell A7: 服薬状況
+Found '服薬' in cell M7: 服薬状況

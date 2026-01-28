@@ -1,0 +1,21 @@
+{
+    "name": "福ちゃん",
+    "short_name": "福ちゃん",
+    "description": "福祉記録支援アプリ - 音声やテキストから福祉記録を自動作成",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#f5f5f0",
+    "theme_color": "#68a564",
+    "icons": [
+        {
+            "src": "/static/fukuchan.jpg",
+            "sizes": "192x192",
+            "type": "image/jpeg"
+        },
+        {
+            "src": "/static/fukuchan.jpg",
+            "sizes": "512x512",
+            "type": "image/jpeg"
+        }
+    ]
+}

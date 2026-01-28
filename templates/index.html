@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>福ちゃん - 福祉記録支援アプリ</title>
+
+    <!-- Favicon for browser tab -->
+    <link rel="icon" type="image/jpeg" href="/static/fukuchan.jpg">
+    <link rel="apple-touch-icon" href="/static/fukuchan.jpg">
+
+    <!-- PWA meta tags for mobile install -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="福ちゃん">
+    <meta name="theme-color" content="#68a564">
+    <link rel="manifest" href="/static/manifest.json">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Zen Maru Gothic', sans-serif;
+        }
+
+        .drag-active {
+            background-color: #e6fffa;
+            border-color: #319795;
+        }
+
+        /* Compact scrollbar for file list */
+        #fileList {
+            max-height: 80px;
+            overflow-y: auto;
+        }
+
+        #fileList::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        #fileList::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        #fileList::-webkit-scrollbar-thumb {
+            background: #cbd5e0;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 h-screen overflow-hidden flex items-center justify-center text-slate-800">
+    <div class="w-full max-w-lg bg-white rounded-xl shadow-xl overflow-hidden flex flex-col max-h-[95vh]">
+
+        <!-- Header -->
+        <header class="bg-gradient-to-r from-green-600 to-teal-600 text-white p-4 text-center shrink-0">
+            <div class="flex items-center justify-center gap-3">
+                <img src="/static/fukuchan.jpg" alt="福ちゃん" class="w-10 h-10 rounded-full shadow">
+                <div>
+                    <h1 class="text-xl font-bold">福ちゃん</h1>
+                    <p class="text-xs opacity-80">福祉記録支援アプリ</p>
+                </div>
+            </div>
+        </header>
+
+        <main class="p-5 space-y-4 overflow-y-auto flex-1">
+            <!-- Step 1: Template Selection -->
+            <div>
+                <label for="templateSelect" class="block text-sm font-bold text-gray-700 mb-1">1. テンプレート</label>
+                <select id="templateSelect"
+                    class="w-full border-2 border-gray-200 rounded-lg p-2.5 text-sm focus:border-teal-500 focus:ring-teal-500 outline-none transition bg-gray-50">
+                    <option value="" disabled selected>読み込み中...</option>
+                </select>
+
+                <!-- Monitoring Mode Selector (only shown for monitoring templates) -->
+                <div id="monitoringModeSection" class="hidden mt-2">
+                    <label class="block text-xs text-gray-600 mb-1">評価区分：</label>
+                    <div class="flex gap-2">
+                        <label class="flex items-center gap-1 cursor-pointer">
+                            <input type="radio" name="monitoringMode" value="monitoring_interim" checked
+                                class="text-teal-600">
+                            <span class="text-sm">中間評価</span>
+                        </label>
+                        <label class="flex items-center gap-1 cursor-pointer">
+                            <input type="radio" name="monitoringMode" value="monitoring_final" class="text-teal-600">
+                            <span class="text-sm">終期評価</span>
+                        </label>
+                    </div>
+                    <p id="finalModeWarning" class="hidden text-xs text-orange-600 mt-1 bg-orange-50 p-2 rounded">
+                        ※ 終期評価では、中間評価時のExcelファイルも一緒にアップロードしてください。AIが中間の内容を踏まえて最終評価を作成します。
+                    </p>
+                </div>
+            </div>
+
+            <!-- Step 2: Basic Info (Optional) -->
+            <div id="manualInputSection" class="hidden">
+                <h2 class="text-sm font-bold text-gray-700 mb-2 border-b pb-1">2. 基本情報 (任意・優先使用)</h2>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <input type="text" id="input_user_name" class="border p-2 rounded" placeholder="利用者名">
+                    <input type="text" id="input_user_name_furigana" class="border p-2 rounded" placeholder="ふりがな">
+                    <input type="text" id="input_staff_name" class="border p-2 rounded" placeholder="作成担当者">
+                    <input type="date" id="input_date" class="border p-2 rounded" placeholder="開催日/作成日">
+                    <div id="recordOnlyFields" class="contents">
+                        <input type="text" id="input_location" class="border p-2 rounded" placeholder="開催場所">
+                        <input type="text" id="input_time" class="border p-2 rounded" placeholder="時間 (例: 14:00~)">
+                        <input type="text" id="input_count" class="border p-2 rounded" placeholder="回数 (例: 第1回)">
+                        <input type="text" id="input_next_date" class="border p-2 rounded" placeholder="次回予定 (例: 12月頃)">
+                    </div>
+                    <div id="casemeetingOnlyFields" class="contents hidden">
+                        <input type="text" id="input_cm_service_manager" class="border p-2 rounded"
+                            placeholder="サービス管理責任者">
+                        <input type="text" id="input_cm_location" class="border p-2 rounded" placeholder="開催場所">
+                        <input type="text" id="input_cm_time" class="border p-2 rounded" placeholder="開催時間 (例: 14:00~)">
+                        <input type="text" id="input_cm_attendees" class="border p-2 rounded"
+                            placeholder="会議出席者 (例: 本人、母親、相談支援専門員)">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Input Data -->
+            <div class="flex-1 flex flex-col min-h-0">
+                <label class="block text-sm font-bold text-gray-700 mb-1">3. 記録データ (音声/画像/PDF)</label>
+
+                <!-- Unified Dropzone -->
+                <div id="dropzone"
+                    class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center transition cursor-pointer hover:bg-teal-50 group shrink-0">
+                    <input type="file" id="fileInput" multiple accept="audio/*,image/*,.pdf" class="hidden">
+                    <div class="space-y-1 pointer-events-none">
+                        <div class="text-gray-400 group-hover:text-teal-500 transition text-2xl">📂</div>
+                        <p class="font-medium text-gray-600 text-sm">ファイルをドロップ</p>
+                        <p class="text-xs text-gray-400">またはクリックして選択</p>
+                    </div>
+                </div>
+
+                <!-- Selected Files List -->
+                <ul id="fileList" class="mt-2 space-y-1 text-xs flex-1"></ul>
+
+                <!-- Text Area -->
+                <div class="mt-3 shrink-0">
+                    <p class="text-xs font-bold text-gray-500 mb-1">補足メモ</p>
+                    <textarea id="textContent" rows="2"
+                        class="w-full p-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-teal-500 focus:border-teal-500 resize-none text-sm"
+                        placeholder="追加情報あれば..."></textarea>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer Action -->
+        <div class="p-4 border-t bg-gray-50 shrink-0">
+            <button onclick="processData()" id="processBtn"
+                class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-lg shadow transition active:scale-95 flex justify-center items-center">
+                <span>作成実行</span>
+            </button>
+
+            <!-- Inline Result Area (Hidden by default) -->
+            <div id="resultArea"
+                class="hidden mt-3 flex items-center justify-between bg-green-100 px-4 py-2 rounded-lg border border-green-300">
+                <span class="text-green-800 font-bold text-sm">完了！</span>
+                <a id="downloadLink" href="#"
+                    class="text-sm bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-4 rounded shadow">
+                    DL
+                </a>
+            </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loadingOverlay"
+            class="hidden fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center z-50 backdrop-blur-sm">
+            <div class="bg-white p-6 rounded-xl shadow-2xl flex flex-col items-center">
+                <div class="animate-spin rounded-full h-10 w-10 border-4 border-teal-500 border-t-transparent mb-3">
+                </div>
+                <p class="text-teal-800 font-bold text-sm animate-pulse">解析中...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let selectedFiles = [];
+        let templates = {};
+
+        // Init
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadTemplates();
+            setupDropzone();
+
+            // Template selection change event
+            const select = document.getElementById('templateSelect');
+            select.addEventListener('change', (e) => {
+                const val = e.target.value;
+                const showManual = ['record', 'monitoring', 'monitoring_interim', 'monitoring_final', 'assessment', 'casemeeting'].includes(val);
+                const section = document.getElementById('manualInputSection');
+                const monitoringModeSection = document.getElementById('monitoringModeSection');
+
+                // Show/hide monitoring mode selector
+                if (val === 'monitoring') {
+                    monitoringModeSection.classList.remove('hidden');
+                } else {
+                    monitoringModeSection.classList.add('hidden');
+                }
+
+                if (showManual) {
+                    section.classList.remove('hidden');
+
+                    // Fields specific to templates
+                    const recordFields = document.getElementById('recordOnlyFields');
+                    const casemeetingFields = document.getElementById('casemeetingOnlyFields');
+                    const isRecord = (val === 'record');
+                    const isCasemeeting = (val === 'casemeeting');
+
+                    // Toggle Record fields (location, time, count, next_date)
+                    if (isRecord) {
+                        recordFields.classList.remove('hidden');
+                        recordFields.classList.add('contents');
+                    } else {
+                        recordFields.classList.add('hidden');
+                        recordFields.classList.remove('contents');
+                    }
+
+                    // Toggle Casemeeting fields (location, time, attendees)
+                    if (isCasemeeting) {
+                        casemeetingFields.classList.remove('hidden');
+                        casemeetingFields.classList.add('contents');
+                    } else {
+                        casemeetingFields.classList.add('hidden');
+                        casemeetingFields.classList.remove('contents');
+                    }
+                } else {
+                    section.classList.add('hidden');
+                }
+            });
+
+            // Monitoring mode radio change event
+            document.querySelectorAll('input[name="monitoringMode"]').forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    const warning = document.getElementById('finalModeWarning');
+                    if (e.target.value === 'monitoring_final') {
+                        warning.classList.remove('hidden');
+                    } else {
+                        warning.classList.add('hidden');
+                    }
+                });
+            });
+        });
+
+        async function loadTemplates() {
+            try {
+                const res = await fetch('/templates');
+                templates = await res.json();
+
+                const select = document.getElementById('templateSelect');
+                select.innerHTML = '';
+
+                let isFirst = true;
+                let monitoringAdded = false;
+                Object.keys(templates).forEach((key) => {
+                    // Combine monitoring_interim and monitoring_final into single "monitoring" option
+                    if (key === 'monitoring_interim' || key === 'monitoring_final') {
+                        if (!monitoringAdded) {
+                            const option = document.createElement('option');
+                            option.value = 'monitoring'; // Use 'monitoring' as value, will be resolved by radio
+                            option.textContent = 'モニタリング';
+                            select.appendChild(option);
+                            monitoringAdded = true;
+                        }
+                        return; // Skip adding individual entries
+                    }
+
+                    const t = templates[key];
+                    const option = document.createElement('option');
+                    option.value = key;
+                    option.textContent = t.name;
+                    select.appendChild(option);
+
+                    if (isFirst) {
+                        option.selected = true;
+                        isFirst = false;
+                    }
+                });
+
+                // Trigger change event to set initial UI state
+                select.dispatchEvent(new Event('change'));
+
+            } catch (e) {
+                console.error("Templates load failed", e);
+                const select = document.getElementById('templateSelect');
+                select.innerHTML = '<option disabled>読み込み失敗</option>';
+            }
+        }
+
+        function setupDropzone() {
+            const dropzone = document.getElementById('dropzone');
+            const input = document.getElementById('fileInput');
+
+            dropzone.addEventListener('click', () => input.click());
+
+            input.addEventListener('change', (e) => {
+                handleFiles(e.target.files);
+                input.value = ''; // Reset
+            });
+
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropzone.addEventListener(eventName, preventDefaults, false);
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            dropzone.addEventListener('dragenter', () => dropzone.classList.add('drag-active', 'bg-teal-50'));
+            dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-active', 'bg-teal-50'));
+
+            dropzone.addEventListener('drop', (e) => {
+                dropzone.classList.remove('drag-active', 'bg-teal-50');
+                handleFiles(e.dataTransfer.files);
+            });
+        }
+
+        function handleFiles(files) {
+            const list = document.getElementById('fileList');
+
+            Array.from(files).forEach(file => {
+                selectedFiles.push(file);
+
+                const li = document.createElement('li');
+                li.className = 'flex items-center justify-between bg-gray-50 p-1.5 border rounded';
+                li.innerHTML = `
+                    <div class="flex items-center space-x-2 truncate">
+                        <span class="text-gray-500 text-xs">
+                             ${getIcon(file.type)}
+                        </span>
+                        <span class="text-gray-700 truncate max-w-[150px]">${file.name}</span>
+                    </div>
+                    <button class="text-gray-400 hover:text-red-500 font-bold px-1" onclick="removeFile(this, '${file.name}')">×</button>
+                `;
+                list.appendChild(li);
+            });
+        }
+
+        function getIcon(mime) {
+            if (mime.includes('audio')) return '🎵';
+            if (mime.includes('image')) return '🖼️';
+            if (mime.includes('pdf')) return '📄';
+            return '📎';
+        }
+
+        window.removeFile = function (btn, fileName) {
+            selectedFiles = selectedFiles.filter(f => f.name !== fileName);
+            btn.closest('li').remove();
+        }
+
+        async function processData() {
+            let templateId = document.getElementById('templateSelect').value;
+            const textContent = document.getElementById('textContent').value;
+
+            if (!templateId) {
+                alert("テンプレートを選択してください");
+                return;
+            }
+
+            // Resolve monitoring template ID from radio button
+            if (templateId === 'monitoring') {
+                const selectedMode = document.querySelector('input[name="monitoringMode"]:checked');
+                templateId = selectedMode ? selectedMode.value : 'monitoring_interim';
+            }
+
+            if (selectedFiles.length === 0 && !textContent.trim()) {
+                // Check manual inputs including casemeeting fields:
+                const hasManualInput = ['input_user_name', 'input_staff_name', 'input_date',
+                    'input_location', 'input_time', 'input_count', 'input_next_date',
+                    'input_cm_location', 'input_cm_time', 'input_cm_attendees']
+                    .some(id => document.getElementById(id).value.trim() !== "");
+
+                if (!hasManualInput && selectedFiles.length === 0 && !textContent.trim()) {
+                    alert("記録データまたは基本情報を入力してください");
+                    return;
+                }
+            }
+
+            const formData = new FormData();
+            formData.append('template_id', templateId);
+            formData.append('text_input', textContent);
+
+            // Manual Inputs (shared)
+            formData.append('user_name', document.getElementById('input_user_name').value);
+            formData.append('user_name_furigana', document.getElementById('input_user_name_furigana').value);
+            formData.append('staff_name', document.getElementById('input_staff_name').value);
+            formData.append('date', document.getElementById('input_date').value);
+
+            // Record-specific inputs
+            formData.append('location', document.getElementById('input_location').value);
+            formData.append('time', document.getElementById('input_time').value);
+            formData.append('count', document.getElementById('input_count').value);
+            formData.append('next_date', document.getElementById('input_next_date').value);
+
+            // Casemeeting-specific inputs
+            formData.append('cm_service_manager', document.getElementById('input_cm_service_manager').value);
+            formData.append('cm_location', document.getElementById('input_cm_location').value);
+            formData.append('cm_time', document.getElementById('input_cm_time').value);
+            formData.append('cm_attendees', document.getElementById('input_cm_attendees').value);
+
+            selectedFiles.forEach(file => {
+                formData.append('files', file);
+            });
+
+            // Show loading
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+            document.getElementById('resultArea').classList.add('hidden');
+
+            try {
+                const response = await fetch('/process', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Processing failed');
+                }
+
+                const data = await response.json();
+
+                // Show result
+                document.getElementById('resultArea').classList.remove('hidden');
+                document.getElementById('downloadLink').href = `/download/${data.filename}`;
+
+            } catch (error) {
+                alert("エラーが発生しました: " + error.message);
+            } finally {
+                document.getElementById('loadingOverlay').classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+
+</html>
