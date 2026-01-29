@@ -1,0 +1,26 @@
+# Environment variables (Sensitive Data)
+.env
+.env.local
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# App outputs and temp files
+outputs/
+temp/
+static/*.jpg
+!static/fukuchan.jpg
+!static/manifest.json
+
+# IDE settings
+.vscode/
+.idea/
+
+# Logs
+*.log
