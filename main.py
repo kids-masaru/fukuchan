@@ -88,7 +88,109 @@ with open("mapping_config.json", "r", encoding="utf-8") as f:
 
 # ... (read_excel_monitoring_data and fill_excel helpers are unchanged) ...
 
-# ... (call_gemini helper is unchanged) ...
+# Helper: Gemini Processing
+def call_gemini(template_info: dict, text_input: str = None, file_paths: list = [], interim_data: str = None) -> Dict[str, str]:
+    """
+    Call Gemini to map input data to Excel structure.
+    interim_data: Optional string containing interim monitoring data for final evaluation mode.
+    """
+    if not client:
+        raise HTTPException(status_code=500, detail="Gemini Client not initialized.")
+
+    # Construct mappings description for the prompt - ONLY field names, NO cell addresses
+    mapping_keys = "\n".join([f"- {key}" for key in template_info['mapping'].keys()])
+
+    # Get context (document purpose/meaning) if available
+    context_instruction = template_info.get('context', "")
+    if context_instruction:
+        context_instruction = f"\n\n--- Document Context ---\n{context_instruction}\n------------------------\n"
+
+    # Get style instruction if available
+    style_instruction = template_info.get('style_instruction', "")
+    if style_instruction:
+        style_instruction = f"\n\n--- Writing Style & Formatting Rules ---\n{style_instruction}\n----------------------------------------\n"
+
+    # Construct the prompt text
+    system_instruction = (
+        "You are an expert welfare record assistant specializing in Japanese disability welfare services (障害福祉サービス). "
+        "Your task is to understand the provided audio/images/text and extract relevant information for official documentation.\n"
+        f"{context_instruction}\n"
+        "You will receive:\n"
+        "1. A list of target fields to extract.\n"
+        "2. Input data (Audio, PDF, Images, or Text).\n\n"
+        "Instructions:\n"
+        "- Thoroughly analyze ALL input data to understand the context and meaning.\n"
+        "- Extract information that semantically matches each target field, even if exact wording differs.\n"
+        "- Map the extracted information to the following target fields:\n"
+        f"{mapping_keys}\n"
+        f"{style_instruction}\n"
+        "- Return ONLY a valid JSON object where keys are the EXACT Field Names provided above and values are the extracted content.\n"
+        "- IMPORTANT: Use the field names exactly as listed above as your JSON keys. Do NOT use any other format.\n"
+        "- If a key contains '_チェック' (underscore check), output the string '✓' if the condition is true/present, otherwise leave it empty.\n"
+        "- If a piece of information is missing, leave the value as an empty string or null.\n"
+        "- Do not include markdown formatting (like ```json), just the raw JSON string.\n"
+    )
+    
+    contents = [system_instruction]
+    
+    # Add interim monitoring data if provided (for final evaluation mode)
+    if interim_data:
+        contents.append(f"--- 中間評価時のデータ (Interim Monitoring Data) ---\n{interim_data}\n--- 中間評価データここまで ---\n")
+    
+    if text_input:
+        contents.append(f"--- Input Data (Text) ---\n{text_input}\n")
+    
+    for path in file_paths:
+        mime_type = "application/octet-stream" # Default
+        if path.lower().endswith(".mp3"): mime_type = "audio/mp3"
+        elif path.lower().endswith(".wav"): mime_type = "audio/wav"
+        elif path.lower().endswith(".m4a"): mime_type = "audio/mp4"
+        elif path.lower().endswith(".aac"): mime_type = "audio/aac"
+        elif path.lower().endswith(".flac"): mime_type = "audio/flac"
+        elif path.lower().endswith(".ogg"): mime_type = "audio/ogg"
+        elif path.lower().endswith(".jobt"): mime_type = "image/jpeg" 
+        elif path.lower().endswith(".jpg") or path.lower().endswith(".jpeg"): mime_type = "image/jpeg"
+        elif path.lower().endswith(".png"): mime_type = "image/png"
+        elif path.lower().endswith(".pdf"): mime_type = "application/pdf"
+        elif path.lower().endswith(".txt"): mime_type = "text/plain"
+
+        # Read file bytes for new SDK upload
+        print(f"Reading file: {path}")
+        with open(path, "rb") as f:
+            file_data = f.read()
+            
+        part = types.Part.from_bytes(data=file_data, mime_type=mime_type)
+        contents.append(part)
+        
+    contents.append("\nExtract the information and map it to the JSON structure.")
+
+    print("Sending request to Gemini (v3 Flash Preview)...")
+    try:
+        response = client.models.generate_content(
+            model="gemini-3-flash-preview",
+            contents=contents
+        )
+    except Exception as e:
+        print(f"Gemini API Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Gemini API Error: {str(e)}")
+    
+    # Parse JSON
+    try:
+        cleaned_text = response.text.strip()
+        if cleaned_text.startswith("```json"):
+            cleaned_text = cleaned_text[7:]
+        if cleaned_text.endswith("```"):
+            cleaned_text = cleaned_text[:-3]
+        
+        # DEBUG: Save response to file
+        with open("debug_last_response.json", "w", encoding="utf-8") as f:
+            f.write(cleaned_text)
+            
+        mapping = json.loads(cleaned_text)
+        return mapping
+    except Exception as e:
+        print(f"Error parsing Gemini response: {response.text}")
+        raise HTTPException(status_code=500, detail="Failed to interpret AI response.")
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, username: str = Depends(get_current_username)):
